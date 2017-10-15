@@ -61,7 +61,7 @@ def mk_dot_name(name):
     return re.sub('[^a-zA-Z0-9_]+', '_', str(name))
 
 
-def load_nodes_from_nmap_xml(nmapxml):
+def load_nodes_from_nmap_xml(nmapxml, removeUnreachableNodes):
     import nmap
 
     fh = open(nmapxml, 'r')
@@ -70,6 +70,26 @@ def load_nodes_from_nmap_xml(nmapxml):
 
     nm = nmap.PortScanner()
     nd = nm.analyse_nmap_xml_scan(report)
+
+    if removeUnreachableNodes:
+        seenIps = nd['scan'].keys()
+
+        # Filter clusters
+        for k in clusters.copy():
+            cluster = clusters[k]
+            hasIp = False
+
+            for ip in (cluster.vips + cluster.rips):
+                if str(ip) not in seenIps:
+                    del clusters[k]
+                    break
+
+        # Filter nodes
+        for k in nodes.copy():
+            node = nodes[k]
+
+            if str(node.ip) not in seenIps:
+                del nodes[k]
 
     for ip in nd['scan']:
         data = nd['scan'][ip]
@@ -427,7 +447,7 @@ def draw_graph(args):
 
     if len(args.nmap_xml):
         for nmap_xml in args.nmap_xml:
-            load_nodes_from_nmap_xml(nmap_xml)
+            load_nodes_from_nmap_xml(nmap_xml, args.nmap_remove_unreachable)
 
     limit_subnets = []
     if len(args.limit_ext):
@@ -470,6 +490,8 @@ if __name__ == '__main__':
                         help='Attempt to resolve DNS for all IPs')
     parser.add_argument('--nmap-xml', nargs='+', default=(),
                         help='Get additional node details from these nmap XML scan files')
+    parser.add_argument('--nmap-remove-unreachable', action='store_true', default=False,
+                        help='Remove nodes that aren\'t recheable')
     parser.add_argument('--limit-ext', nargs='+', default=(),
                         help='Only include these source IPs or networks')
     parser.add_argument('--font', default='droid sans,dejavu sans,helvetica',
